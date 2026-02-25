@@ -5,93 +5,73 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // интро-каскад
+  const typingSound = useRef(null);
+  const bottomRef = useRef(null);
+
+  // ====== HERO ANIMATION STATE ======
   const [showH1, setShowH1] = useState(false);
   const [showH2, setShowH2] = useState(false);
+  const [showH3, setShowH3] = useState(false);
 
-  // гирлянда "ыхы хы"
-  const [sparkles, setSparkles] = useState([]);
-  const sparkleTimerRef = useRef(null);
+  const [showGiggles, setShowGiggles] = useState(false);
+  const [giggles, setGiggles] = useState([]); // {id, top, left, delay, duration}
 
-  // звук печати
-  const typingSound = useRef(null);
+  // 3 отдельные "шейпы" — фиксируем их "рандомность" один раз на загрузке
+  const initialGiggles = useMemo(() => {
+    const pick = () => {
+      // область — правый верх hero-карты, чтобы выглядело как на твоём скрине
+      // top/left в процентах относительно hero-карты
+      const top = 18 + Math.random() * 55;   // 18%..73%
+      const left = 58 + Math.random() * 33;  // 58%..91%
+      const delay = Math.random() * 0.6;     // небольшая рассинхронизация
+      const duration = 0.6 + Math.random() * 0.8; // скорость мигания
+      return { top, left, delay, duration };
+    };
 
-  // автоскролл к последнему сообщению
-  const bottomRef = useRef(null);
+    return [
+      { id: "g1", text: "ыхы хы", ...pick() },
+      { id: "g2", text: "ыхы хы", ...pick() },
+      { id: "g3", text: "ыхы хы", ...pick() },
+    ];
+  }, []);
+
+  // Появление строк + запуск "гирлянды" после 2й строки
+  useEffect(() => {
+    const t1 = setTimeout(() => setShowH1(true), 150);            // старт
+    const t2 = setTimeout(() => setShowH2(true), 150 + 1200 + 200); // 0.2s пауза после 1й
+    const t3 = setTimeout(() => setShowH3(true), 150 + 1200 + 200 + 900 + 200); // 0.2s пауза после 2й
+
+    // "ыхы хы" должны появиться ПОСЛЕ второй строки
+    const tgStart = setTimeout(() => {
+      setGiggles(initialGiggles);
+      setShowGiggles(true);
+
+      // длительность ~4 секунды после старта первой "ыхы хы"
+      setTimeout(() => setShowGiggles(false), 4000);
+    }, 150 + 1200 + 200 + 250); // чуть после появления 2й строки
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(tgStart);
+    };
+  }, [initialGiggles]);
+
+  // ====== CHAT AUTOSCROLL ======
   useEffect(() => {
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
   }, [messages, loading]);
 
-  // запускаем интро
-  useEffect(() => {
-    const t1 = setTimeout(() => setShowH1(true), 200);
-    const t2 = setTimeout(() => setShowH2(true), 900); // H2 появляется позже
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, []);
-
-  // гирлянда работает только пока НЕ показали H2
-  useEffect(() => {
-    // стартуем только когда H1 уже есть, а H2 ещё нет
-    if (!showH1 || showH2) return;
-
-    // каждые N мс создаём "пачку" из 3 огоньков
-    sparkleTimerRef.current = setInterval(() => {
-      const now = Date.now();
-
-      const newOnes = Array.from({ length: 3 }).map((_, idx) => {
-        // рандомные позиции внутри hero (в процентах)
-        const x = 10 + Math.random() * 80; // 10..90%
-        const y = 25 + Math.random() * 55; // 25..80%
-        // рандомная длительность "жизни"
-        const life = 900 + Math.random() * 900; // 0.9..1.8s
-        // рандомная задержка мигания
-        const delay = Math.random() * 0.6;
-
-        return {
-          id: `${now}-${idx}-${Math.random().toString(16).slice(2)}`,
-          x,
-          y,
-          life,
-          delay,
-        };
-      });
-
-      setSparkles((prev) => [...prev, ...newOnes]);
-
-      // убираем устаревшие (чтобы не копились)
-      setTimeout(() => {
-        setSparkles((prev) => prev.filter((s) => now - parseInt(s.id.split("-")[0], 10) < 2500));
-      }, 2600);
-    }, 650);
-
-    return () => {
-      clearInterval(sparkleTimerRef.current);
-      sparkleTimerRef.current = null;
-    };
-  }, [showH1, showH2]);
-
-  // когда появляется H2 — мгновенно “гасим гирлянду”
-  useEffect(() => {
-    if (!showH2) return;
-    clearInterval(sparkleTimerRef.current);
-    sparkleTimerRef.current = null;
-    setSparkles([]); // убрать “ыхы хы”
-  }, [showH2]);
-
   async function startTypingSound() {
     const a = typingSound.current;
     if (!a) return;
     try {
-      // IMPORTANT: на многих устройствах звук станет слышен ТОЛЬКО после явного клика/Enter
-      a.volume = 0.9; // сделала громче
+      a.volume = 0.8; // было тихо — делаем громче
       a.currentTime = 0;
-      await a.play();
+      await a.play(); // может быть заблокировано браузером — это ок
     } catch (_) {}
   }
 
@@ -135,7 +115,7 @@ export default function Home() {
   return (
     <div style={styles.page}>
       <style jsx global>{`
-        /* скрываем скроллбар, но скролл остаётся */
+        /* Скрываем скроллбар (скролл работает) */
         .chatScroll {
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -145,49 +125,45 @@ export default function Home() {
           height: 0;
         }
 
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
+        /* Плавнее и подольше появление */
+        @keyframes softIn {
+          from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+          to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
         }
 
-        @keyframes blinkSoft {
-          0% { opacity: .15; transform: translateY(0); }
-          25% { opacity: 1; }
-          50% { opacity: .35; transform: translateY(-1px); }
-          75% { opacity: 1; }
-          100% { opacity: .15; transform: translateY(0); }
+        /* Лёгкое "дыхание" карточек */
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-3px); }
+          100% { transform: translateY(0px); }
         }
 
-        .sparkle {
-          position: absolute;
-          font-weight: 700;
-          letter-spacing: 0.3px;
-          opacity: 0;
-          animation:
-            fadeUp .35s ease forwards,
-            blinkSoft 1.25s ease-in-out infinite;
-          pointer-events: none;
-          user-select: none;
-          text-shadow: 0 8px 30px rgba(0,0,0,.55);
+        /* Точки typing */
+        .dot { animation: blink 1.2s infinite both; }
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink {
+          0% { opacity: 0.2; }
+          20% { opacity: 1; }
+          100% { opacity: 0.2; }
         }
 
-        .h1In {
-          animation: fadeUp .55s ease forwards;
-        }
-        .h2In {
-          animation: fadeUp .55s ease forwards;
+        /* "Гирлянда" — мерцание */
+        @keyframes garland {
+          0% { opacity: 0.1; transform: translateY(0px) scale(0.98); }
+          15% { opacity: 1; }
+          50% { opacity: 0.2; transform: translateY(-2px) scale(1); }
+          100% { opacity: 0.1; transform: translateY(0px) scale(0.98); }
         }
 
-        /* на мобилке делаем всё компактнее */
+        /* Адаптив: ширина и высоты, чтобы инпут был удобный */
         @media (max-width: 520px) {
-          .heroWrap { padding: 18px !important; border-radius: 18px !important; }
-          .heroTitle { font-size: 30px !important; }
-          .heroSub { font-size: 14px !important; }
-          .cardWrap { height: 78vh !important; border-radius: 18px !important; }
+          .wrap {
+            padding: 14px !important;
+          }
         }
       `}</style>
 
-      {/* звук (важно: браузер может блокировать автозвук, но после первого Enter/клика обычно ок) */}
       <audio
         ref={typingSound}
         src="https://cdn.pixabay.com/audio/2022/03/15/audio_6b1b6e3b0f.mp3"
@@ -195,98 +171,107 @@ export default function Home() {
         playsInline
       />
 
-      {/* HERO / Обложка */}
-      <div style={styles.hero} className="heroWrap">
-        {/* фон можно заменить, если захочешь */}
-        <div style={styles.heroBg} />
-
-        {/* логотип */}
-        <img src="/logo.png" alt="logo" style={styles.logo} />
-
-        {/* H1 */}
-        <h1
-          className={showH1 ? "h1In heroTitle" : "heroTitle"}
-          style={{ ...styles.h1, opacity: showH1 ? 1 : 0 }}
-        >
-          Mr. Reason!
-        </h1>
-
-        {/* H2 */}
-        <h2
-          className={showH2 ? "h2In heroSub" : "heroSub"}
-          style={{ ...styles.h2, opacity: showH2 ? 1 : 0 }}
-        >
-          Мой любимый человек Реваз! С днём рождения.
-          <br />
-          Это мой изощрённый способ порадовать тебя.
-        </h2>
-
-        {/* гирлянда */}
-        {!showH2 &&
-          sparkles.map((s) => (
+      <div className="wrap" style={styles.wrap}>
+        {/* HERO */}
+        <div style={styles.hero}>
+          <div style={styles.heroLeft}>
             <div
-              key={s.id}
-              className="sparkle"
               style={{
-                left: `${s.x}%`,
-                top: `${s.y}%`,
-                color: s.x > 55 ? "#2D63FF" : "#F5C842", // синий/жёлтый как в лого
-                animationDelay: `${s.delay}s`,
+                ...styles.heroH1,
+                ...(showH1 ? styles.show : styles.hide),
               }}
             >
-              ыхы хы
+              Mr. Reason!
             </div>
-          ))}
-      </div>
 
-      {/* CHAT */}
-      <div style={styles.card} className="cardWrap">
-        <div style={styles.header}>
-          <div style={styles.headerTitle}>Для Реваза</div>
-          <div style={styles.headerSub}>
-            Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
+            <div
+              style={{
+                ...styles.heroH2,
+                ...(showH2 ? styles.show : styles.hide),
+              }}
+            >
+              Мой любимый человек Реваз! С днём рождения.
+            </div>
+
+            <div
+              style={{
+                ...styles.heroH3,
+                ...(showH3 ? styles.show : styles.hide),
+              }}
+            >
+              Это мой изощрённый способ порадовать тебя.
+            </div>
           </div>
+
+          {/* Гирлянда "ыхы хы" — 3 отдельных шейпа */}
+          {showGiggles &&
+            giggles.map((g) => (
+              <div
+                key={g.id}
+                style={{
+                  ...styles.giggle,
+                  top: `${g.top}%`,
+                  left: `${g.left}%`,
+                  animation: `garland ${g.duration}s ${g.delay}s infinite`,
+                }}
+              >
+                {g.text}
+              </div>
+            ))}
+
+          {/* Декор справа (пока как заглушка градиентом; если добавишь png — заменим на <img/>) */}
+          <div style={styles.heroRightDecor} />
         </div>
 
-        <div style={styles.chat} className="chatScroll">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                ...styles.msg,
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-              }}
-            >
-              <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
-                {m.content}
+        {/* CHAT CARD */}
+        <div style={styles.card}>
+          <div style={styles.header}>
+            <h2 style={styles.title}>Для Реваза</h2>
+            <p style={styles.subtitle}>
+              Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
+            </p>
+          </div>
+
+          <div style={styles.chat} className="chatScroll">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                style={{
+                  ...styles.msg,
+                  justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                }}
+              >
+                <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
+                  {m.content}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {loading && (
-            <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
-              <div style={{ ...styles.bubble, ...styles.typing }}>
-                печатает<span className="dot">.</span>
-                <span className="dot">.</span>
-                <span className="dot">.</span>
+            {loading && (
+              <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
+                <div style={{ ...styles.bubble, ...styles.typing }}>
+                  печатает<span className="dot">.</span>
+                  <span className="dot">.</span>
+                  <span className="dot">.</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={bottomRef} />
-        </div>
+            <div ref={bottomRef} />
+          </div>
 
-        <div style={styles.inputRow}>
-          <input
-            style={styles.input}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Напиши…"
-          />
-          <button style={styles.button} onClick={send}>
-            Отправить
-          </button>
+          <div style={styles.inputRow}>
+            <input
+              style={styles.input}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Напиши..."
+            />
+            <button style={styles.button} onClick={send}>
+              Отправить
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -296,83 +281,135 @@ export default function Home() {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#1E1E1E",
+    background: "#1E1E1E", // фон как на Тильде
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+
+  wrap: {
+    width: "100%",
+    maxWidth: 980,
+    padding: 24,
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",
     gap: 18,
-    padding: 18,
-    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+    fontFamily: "Inter, sans-serif",
   },
 
   hero: {
-    width: "min(980px, 100%)",
     position: "relative",
+    width: "100%",
     borderRadius: 24,
     padding: 22,
+    background: "rgba(25, 28, 35, 0.75)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+    backdropFilter: "blur(18px)",
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.07)",
-    background: "rgba(20, 22, 28, 0.7)",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
+    animation: "float 7s ease-in-out infinite",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    minHeight: 120,
   },
 
-  heroBg: {
+  heroLeft: {
+    maxWidth: 640,
+    zIndex: 2,
+  },
+
+  heroH1: {
+    fontSize: 44,
+    fontWeight: 800,
+    letterSpacing: -0.5,
+    color: "#fff",
+    marginBottom: 8,
+  },
+  heroH2: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.75)",
+    marginBottom: 4,
+  },
+  heroH3: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.75)",
+  },
+
+  show: {
+    opacity: 1,
+    transform: "translateY(0)",
+    filter: "blur(0)",
+    animation: "softIn 1.2s ease both",
+  },
+  hide: {
+    opacity: 0,
+    transform: "translateY(10px)",
+    filter: "blur(4px)",
+  },
+
+  giggle: {
     position: "absolute",
-    inset: 0,
-    background:
-      "radial-gradient(1200px 600px at 70% 20%, rgba(45,99,255,0.12), transparent 55%), radial-gradient(900px 500px at 20% 60%, rgba(245,200,66,0.10), transparent 60%)",
-    filter: "blur(0px)",
+    zIndex: 3,
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 14,
+    backdropFilter: "blur(10px)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     pointerEvents: "none",
   },
 
-  logo: {
-    position: "absolute",
-    right: 18,
-    top: 12,
-    width: 220,
-    maxWidth: "38%",
+  heroRightDecor: {
+    width: 210,
+    minWidth: 210,
+    borderRadius: 18,
+    background:
+      "radial-gradient(circle at 40% 35%, rgba(245,200,66,0.35), transparent 55%), radial-gradient(circle at 70% 65%, rgba(74,117,255,0.35), transparent 55%)",
     opacity: 0.9,
-    filter: "drop-shadow(0 18px 50px rgba(0,0,0,.55))",
+    border: "1px solid rgba(255,255,255,0.06)",
+    zIndex: 1,
   },
 
-  h1: {
-    position: "relative",
-    margin: 0,
-    color: "#fff",
-    fontSize: 44,
-    fontWeight: 800,
-    letterSpacing: "-0.02em",
-  },
-
-  h2: {
-    position: "relative",
-    margin: "10px 0 0 0",
-    color: "rgba(255,255,255,0.78)",
-    fontSize: 16,
-    fontWeight: 500,
-    lineHeight: 1.45,
-    maxWidth: 520,
-  },
-
+  // CHAT CARD
   card: {
-    width: "min(980px, 100%)",
-    height: "72vh",
-    background: "rgba(25, 28, 35, 0.85)",
-    backdropFilter: "blur(20px)",
+    width: "100%",
     borderRadius: 24,
+    background: "rgba(25, 28, 35, 0.85)",
     border: "1px solid rgba(255,255,255,0.08)",
     boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+    backdropFilter: "blur(20px)",
+    overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden",
+
+    // ↑ вот тут правка высоты: делаем чуть выше + аккуратнее на мобилке
+    height: "calc(100vh - 220px)",
+    minHeight: 520,
+    maxHeight: 820,
   },
 
   header: {
-    padding: 18,
+    padding: 20,
     borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
-  headerTitle: { color: "#fff", fontSize: 26, fontWeight: 700 },
-  headerSub: { marginTop: 6, color: "#aaa", fontSize: 14 },
+
+  title: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: 700,
+    margin: 0,
+  },
+
+  subtitle: {
+    color: "#aaa",
+    marginTop: 8,
+    marginBottom: 0,
+    fontSize: 14,
+    lineHeight: 1.4,
+  },
 
   chat: {
     flex: 1,
@@ -383,7 +420,10 @@ const styles = {
     gap: 12,
   },
 
-  msg: { display: "flex" },
+  msg: {
+    display: "flex",
+    animation: "softIn 0.55s ease both",
+  },
 
   bubble: {
     maxWidth: "78%",
@@ -391,10 +431,11 @@ const styles = {
     borderRadius: 16,
     background: "rgba(255,255,255,0.05)",
     color: "#fff",
-    lineHeight: 1.4,
+    lineHeight: 1.45,
     fontSize: 15,
     backdropFilter: "blur(6px)",
     border: "1px solid rgba(255,255,255,0.08)",
+    wordBreak: "break-word",
   },
 
   user: {
@@ -403,23 +444,29 @@ const styles = {
     border: "none",
   },
 
-  typing: { opacity: 0.65, fontStyle: "italic" },
+  typing: {
+    opacity: 0.65,
+    fontStyle: "italic",
+  },
 
   inputRow: {
     display: "flex",
     gap: 12,
     padding: 14,
     borderTop: "1px solid rgba(255,255,255,0.06)",
+    background: "rgba(0,0,0,0.12)",
   },
 
   input: {
     flex: 1,
+    minWidth: 0,
     background: "#0f1116",
     border: "1px solid rgba(255,255,255,0.15)",
     borderRadius: 12,
-    padding: "10px 14px",
+    padding: "12px 14px",
     color: "#fff",
     outline: "none",
+    fontSize: 16, // важно для iOS чтобы не зумило
   },
 
   button: {
@@ -430,5 +477,6 @@ const styles = {
     color: "#111",
     fontWeight: 700,
     cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 };
