@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export default function Home() {
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "Привет. Хочешь начать с вопроса: «Кто такой Реваз?»" }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const typingSound = useRef(null);
 
   async function send() {
     const text = input.trim();
@@ -15,35 +15,102 @@ export default function Home() {
     setMessages((m) => [...m, { role: "user", content: text }]);
     setLoading(true);
 
+    // старт звука
+    try {
+      typingSound.current?.play();
+    } catch (_) {}
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text }),
       });
 
       const data = await res.json();
 
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: data.reply || "…" }
+        { role: "assistant", content: data.reply || "…" },
       ]);
     } catch {
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: "Ошибка. Попробуй ещё раз." }
+        { role: "assistant", content: "Ошибка. Попробуй ещё раз." },
       ]);
     } finally {
       setLoading(false);
+
+      // стоп звука
+      if (typingSound.current) {
+        typingSound.current.pause();
+        typingSound.current.currentTime = 0;
+      }
     }
   }
 
   return (
-    <div style={styles.page}>
+    <div style={styles.container}>
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes float {
+          0% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-3px);
+          }
+          100% {
+            transform: translateY(0px);
+          }
+        }
+
+        .dot {
+          animation: blink 1.4s infinite both;
+        }
+        .dot:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        .dot:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+
+        @keyframes blink {
+          0% {
+            opacity: 0.2;
+          }
+          20% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0.2;
+          }
+        }
+      `}</style>
+
+      {/* Аудио должно быть внутри return */}
+      <audio
+        ref={typingSound}
+        src="https://cdn.pixabay.com/audio/2022/03/15/audio_6b1b6e3b0f.mp3"
+        preload="auto"
+      />
+
       <div style={styles.card}>
         <div style={styles.header}>
           <h2 style={styles.title}>Для Реваза</h2>
-          <p style={styles.sub}>Открытка с диалогом</p>
+          <p style={styles.subtitle}>
+            Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
+          </p>
         </div>
 
         <div style={styles.chat}>
@@ -52,14 +119,13 @@ export default function Home() {
               key={i}
               style={{
                 ...styles.msg,
-                justifyContent:
-                  m.role === "user" ? "flex-end" : "flex-start"
+                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
               }}
             >
               <div
                 style={{
                   ...styles.bubble,
-                  ...(m.role === "user" ? styles.user : {})
+                  ...(m.role === "user" ? styles.user : {}),
                 }}
               >
                 {m.content}
@@ -67,9 +133,14 @@ export default function Home() {
             </div>
           ))}
 
+          {/* typing */}
           {loading && (
-            <div style={styles.msg}>
-              <div style={styles.bubble}>…</div>
+            <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
+              <div style={{ ...styles.bubble, ...styles.typing }}>
+                печатает<span className="dot">.</span>
+                <span className="dot">.</span>
+                <span className="dot">.</span>
+              </div>
             </div>
           )}
         </div>
@@ -93,88 +164,113 @@ export default function Home() {
 }
 
 const styles = {
-  page: {
+  container: {
     minHeight: "100vh",
-    background: "#0b0f19",
+    background: "#1E1E1E", // фон как на Тильде
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    fontFamily: "system-ui",
-    color: "#fff"
+    padding: 24,
+    fontFamily: "Inter, sans-serif",
   },
 
   card: {
-    width: "90%",
-    maxWidth: 800,
-    height: "80vh",
-    background: "rgba(255,255,255,0.04)",
-    borderRadius: 20,
+    width: "100%",
+    maxWidth: 720,
+    height: "85vh",
+    background: "rgba(25, 28, 35, 0.85)",
+    backdropFilter: "blur(20px)",
+    borderRadius: 24,
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.08)"
+    animation: "float 6s ease-in-out infinite",
   },
 
   header: {
-    padding: 20,
-    borderBottom: "1px solid rgba(255,255,255,0.08)"
+    padding: 24,
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
 
-  title: { margin: 0 },
+  title: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: 600,
+    margin: 0,
+  },
 
-  sub: {
-    margin: "6px 0 0",
-    opacity: 0.7,
-    fontSize: 13
+  subtitle: {
+    color: "#aaa",
+    marginTop: 8,
+    marginBottom: 0,
+    fontSize: 14,
+    lineHeight: 1.4,
   },
 
   chat: {
     flex: 1,
-    padding: 20,
+    padding: 24,
     overflowY: "auto",
     display: "flex",
     flexDirection: "column",
-    gap: 10
+    gap: 12,
   },
 
   msg: {
-    display: "flex"
+    display: "flex",
+    marginBottom: 12,
+    animation: "fadeIn 0.4s ease",
   },
 
   bubble: {
-    maxWidth: "70%",
-    padding: "10px 14px",
-    background: "rgba(255,255,255,0.08)",
-    borderRadius: 14,
-    fontSize: 14
+    maxWidth: "75%",
+    padding: "12px 16px",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.05)",
+    color: "#fff",
+    lineHeight: 1.4,
+    fontSize: 15,
+    backdropFilter: "blur(6px)",
+    border: "1px solid rgba(255,255,255,0.08)",
   },
 
   user: {
-    background: "rgba(120,140,255,0.25)"
+    background: "linear-gradient(135deg, #f5c842, #f7d774)",
+    color: "#111",
+    border: "none",
+  },
+
+  typing: {
+    opacity: 0.6,
+    fontStyle: "italic",
   },
 
   inputRow: {
     display: "flex",
-    gap: 10,
-    padding: 14,
-    borderTop: "1px solid rgba(255,255,255,0.08)"
+    gap: 12,
+    padding: 16,
+    borderTop: "1px solid rgba(255,255,255,0.06)",
   },
 
   input: {
     flex: 1,
-    background: "#05070f",
+    background: "#0f1116",
     border: "1px solid rgba(255,255,255,0.15)",
     borderRadius: 12,
-    padding: "10px",
-    color: "#fff"
+    padding: "10px 14px",
+    color: "#fff",
+    outline: "none",
   },
 
   button: {
-    background: "#2d3cff",
+    background: "#f5c842",
     border: "none",
     borderRadius: 12,
     padding: "0 18px",
-    color: "#fff",
-    cursor: "pointer"
-  }
+    color: "#111",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 };
