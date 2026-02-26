@@ -1,3 +1,4 @@
+// pages/index.js
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function Home() {
@@ -8,46 +9,46 @@ export default function Home() {
   const typingSound = useRef(null);
   const bottomRef = useRef(null);
 
-  // --- Hero animation states
-  const [showH1, setShowH1] = useState(false);
-  const [showL2, setShowL2] = useState(false);
-  const [showL3, setShowL3] = useState(false);
-  const [showGiggles, setShowGiggles] = useState(false);
+  // 3 "ыхы хы" как отдельные шейпы: появляются после второй строки и живут ~4с
+  const [showHihi, setShowHihi] = useState(false);
+  const [hihi, setHihi] = useState([
+    { x: 0.18, y: 0.45, a: 0.9 },
+    { x: 0.45, y: 0.55, a: 0.9 },
+    { x: 0.72, y: 0.42, a: 0.9 },
+  ]);
 
-  // 3 "ыхы хы" shapes positions (random-ish but stable per page load)
-  const giggles = useMemo(() => {
-    // inside hero card
-    const items = [0, 1, 2].map((i) => {
-      const top = 20 + Math.random() * 55; // %
-      const left = 8 + Math.random() * 72; // %
-      const delay = Math.random() * 0.8; // seconds
-      const blink = 0.7 + Math.random() * 0.9; // seconds
-      return { id: i, top, left, delay, blink };
-    });
-    return items;
-  }, []);
-
-  // HERO: sequence H1 -> line2 -> line3, with 0.2s gaps
   useEffect(() => {
-    const t1 = setTimeout(() => setShowH1(true), 200);
-    const t2 = setTimeout(() => setShowL2(true), 200 + 900 + 200); // after H1 fade + gap
-    const t3 = setTimeout(() => setShowL3(true), 200 + 900 + 200 + 650 + 200); // after L2 fade + gap
+    // тайминг появления: H1 -> (0.2s) H2 -> (0.2s) H3, после H2 включаем "ыхы хы"
+    const t = setTimeout(() => {
+      setShowHihi(true);
 
-    // start giggles after line2 starts showing
-    const tgOn = setTimeout(() => setShowGiggles(true), 200 + 900 + 200 + 150);
-    // keep giggles ~4s from first appearance
-    const tgOff = setTimeout(() => setShowGiggles(false), 200 + 900 + 200 + 150 + 4000);
+      // рандом как гирлянда (слегка дергаем позиции/прозрачность)
+      const iv = setInterval(() => {
+        setHihi((prev) =>
+          prev.map((p) => ({
+            x: clamp(p.x + rand(-0.03, 0.03), 0.08, 0.86),
+            y: clamp(p.y + rand(-0.03, 0.03), 0.22, 0.82),
+            a: clamp(p.a + rand(-0.15, 0.15), 0.5, 1),
+          }))
+        );
+      }, 220);
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(tgOn);
-      clearTimeout(tgOff);
-    };
+      // выключить через ~4 секунды от первого появления
+      const off = setTimeout(() => {
+        clearInterval(iv);
+        setShowHihi(false);
+      }, 4000);
+
+      return () => {
+        clearInterval(iv);
+        clearTimeout(off);
+      };
+    }, 900); // появляется после второй строки (под нашу анимацию ниже)
+
+    return () => clearTimeout(t);
   }, []);
 
-  // Autoscroll to bottom
+  // автоскролл к последнему сообщению
   useEffect(() => {
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -58,9 +59,9 @@ export default function Home() {
     const a = typingSound.current;
     if (!a) return;
     try {
-      a.volume = 0.75; // громче
+      a.volume = 0.7;
       a.currentTime = 0;
-      await a.play(); // может быть заблокировано — это ок
+      await a.play();
     } catch (_) {}
   }
 
@@ -80,8 +81,6 @@ export default function Home() {
     setInput("");
     setMessages((m) => [...m, { role: "user", content: text }]);
     setLoading(true);
-
-    // важно: play() должен быть от user action (Enter/Click)
     await startTypingSound();
 
     try {
@@ -103,22 +102,34 @@ export default function Home() {
   }
 
   return (
-    <>
+    <div style={styles.page}>
       <style jsx global>{`
-        /* ---- Fix "white frame" ---- */
+        /* ✅ Вернуть “тот шрифт” и закрепить его везде */
         html,
-        body,
-        #__next {
+        body {
           height: 100%;
+        }
+        body {
           margin: 0;
+          font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
           background: #1e1e1e;
+          color: #fff;
+        }
+        h1,
+        h2,
+        h3,
+        p,
+        input,
+        button {
+          font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
         }
 
-        * {
-          box-sizing: border-box;
+        /* ✅ iOS zoom на фокусе инпута: не будет, если font-size >= 16px */
+        input {
+          font-size: 16px !important;
         }
 
-        /* Hide scrollbar but keep scroll */
+        /* Скрыть скроллбар, но оставить скролл */
         .chatScroll {
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -128,11 +139,12 @@ export default function Home() {
           height: 0;
         }
 
+        /* Плавные появления (дольше + пауза 0.2с между строками) */
         @keyframes fadeUp {
           from {
             opacity: 0;
             transform: translateY(10px);
-            filter: blur(2px);
+            filter: blur(4px);
           }
           to {
             opacity: 1;
@@ -141,19 +153,65 @@ export default function Home() {
           }
         }
 
-        @keyframes softFloat {
-          0% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-3px);
-          }
-          100% {
-            transform: translateY(0px);
-          }
+        .h1 {
+          opacity: 0;
+          animation: fadeUp 0.8s ease forwards;
+          animation-delay: 0.0s;
+        }
+        .h2 {
+          opacity: 0;
+          animation: fadeUp 0.9s ease forwards;
+          animation-delay: 0.2s;
+        }
+        .h3 {
+          opacity: 0;
+          animation: fadeUp 0.9s ease forwards;
+          animation-delay: 0.4s;
         }
 
-        @keyframes blinkDot {
+        /* “ыхы хы” мерцание — замедлить */
+        @keyframes slowBlink {
+          0% {
+            opacity: 0.25;
+            transform: translateY(0);
+          }
+          50% {
+            opacity: 1;
+            transform: translateY(-1px);
+          }
+          100% {
+            opacity: 0.25;
+            transform: translateY(0);
+          }
+        }
+        .hihiShape {
+          position: absolute;
+          padding: 10px 14px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.09);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          color: rgba(255, 255, 255, 0.9);
+          font-weight: 600;
+          letter-spacing: 0.2px;
+          animation: slowBlink 1.9s ease-in-out infinite; /* ✅ медленнее */
+          user-select: none;
+          pointer-events: none;
+          white-space: nowrap;
+        }
+
+        /* “typing...” точки */
+        .dot {
+          animation: blink 1.6s infinite both;
+        }
+        .dot:nth-child(2) {
+          animation-delay: 0.25s;
+        }
+        .dot:nth-child(3) {
+          animation-delay: 0.5s;
+        }
+        @keyframes blink {
           0% {
             opacity: 0.2;
           }
@@ -165,37 +223,36 @@ export default function Home() {
           }
         }
 
-        .dot {
-          animation: blinkDot 1.2s infinite both;
-        }
-        .dot:nth-child(2) {
-          animation-delay: 0.18s;
-        }
-        .dot:nth-child(3) {
-          animation-delay: 0.36s;
-        }
-
-        /* Garland blink for giggles */
-        @keyframes garland {
-          0%,
-          100% {
-            opacity: 0.15;
-            transform: translateY(0);
+        /* ✅ Мобилка: кнопка всегда помещается в рамку + удобный низ */
+        @media (max-width: 520px) {
+          .inputRow {
+            flex-direction: column;
+            gap: 10px;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
           }
-          50% {
-            opacity: 0.95;
-            transform: translateY(-1px);
+          .sendBtn {
+            width: 100%;
+            height: 46px;
           }
-        }
-
-        /* Prevent iOS zoom on focus */
-        input,
-        textarea {
-          font-size: 16px;
+          .textInput {
+            width: 100%;
+            height: 46px;
+          }
+          .chatCard {
+            height: min(74vh, 620px); /* ✅ короче, чтобы поле ввода было удобно */
+          }
+          .heroCard {
+            padding: 18px 18px 16px 18px;
+          }
+          .heroLogo {
+            width: 120px !important;
+            right: 14px !important;
+            top: 18px !important;
+            transform: none !important;
+          }
         }
       `}</style>
 
-      {/* typing audio */}
       <audio
         ref={typingSound}
         src="https://cdn.pixabay.com/audio/2022/03/15/audio_6b1b6e3b0f.mp3"
@@ -203,130 +260,107 @@ export default function Home() {
         playsInline
       />
 
-      <div style={styles.page}>
-        <div style={styles.wrap}>
-          {/* HERO CARD */}
-          <div style={styles.hero}>
-            <div style={styles.heroText}>
-              <h1 style={{ ...styles.h1, ...(showH1 ? styles.appear : styles.hidden) }}>
-                Mr. Reason!
-              </h1>
+      {/* HERO */}
+      <div style={styles.wrap}>
+        <div style={styles.heroCard} className="heroCard">
+          {/* ✅ Логотип не в рамке: просто элемент внутри hero */}
+          <img src="/logo.png" alt="logo" className="heroLogo" style={styles.heroLogo} />
 
-              <p style={{ ...styles.line, ...(showL2 ? styles.appear2 : styles.hidden) }}>
-                Мой любимый человек Реваз! С днём рождения.
-              </p>
+          <h1 className="h1" style={styles.heroTitle}>
+            Mr. Reason!
+          </h1>
+          <p className="h2" style={styles.heroText}>
+            Мой любимый человек Реваз! С днём рождения.
+          </p>
+          <p className="h3" style={styles.heroText}>
+            Это мой изощрённый способ порадовать тебя.
+          </p>
 
-              <p style={{ ...styles.line, ...(showL3 ? styles.appear3 : styles.hidden) }}>
-                Это мой изощрённый способ порадовать тебя.
-              </p>
-            </div>
-
-            {/* LOGO / ART */}
-            {/* Если у тебя PNG будет лежать в /public/logo.png, то src="/logo.png" */}
-            <div style={styles.logoBox}>
-              <img
-                src="/logo.png"
-                alt="logo"
-                style={styles.logoImg}
-                onError={(e) => {
-                  // если логотип не найден — просто прячем, чтобы не ломать верстку
-                  e.currentTarget.style.display = "none";
+          {/* 3 отдельные шейпы “ыхы хы”, появляются после 2-й строки */}
+          {showHihi &&
+            hihi.map((p, idx) => (
+              <div
+                key={idx}
+                className="hihiShape"
+                style={{
+                  left: `${p.x * 100}%`,
+                  top: `${p.y * 100}%`,
+                  opacity: p.a,
                 }}
-              />
-            </div>
+              >
+                ыхы хы
+              </div>
+            ))}
+        </div>
 
-            {/* 3 "ыхы хы" shapes - appear after line2 and blink ~4s */}
-            {showGiggles &&
-              giggles.map((g) => (
-                <div
-                  key={g.id}
-                  style={{
-                    ...styles.giggle,
-                    top: `${g.top}%`,
-                    left: `${g.left}%`,
-                    animation: `garland ${g.blink}s ease-in-out ${g.delay}s infinite`,
-                  }}
-                >
-                  ыхы хы
-                </div>
-              ))}
+        {/* CHAT */}
+        <div style={styles.card} className="chatCard">
+          <div style={styles.header}>
+            <h2 style={styles.title}>Для Реваза</h2>
+            <p style={styles.subtitle}>
+              Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
+            </p>
           </div>
 
-          {/* CHAT CARD */}
-          <div style={styles.card}>
-            <div style={styles.header}>
-              <h2 style={styles.title}>Для Реваза</h2>
-              <p style={styles.subtitle}>
-                Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
-              </p>
-            </div>
-
-            <div style={styles.chat} className="chatScroll">
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  style={{
-                    ...styles.msg,
-                    justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-                  }}
-                >
-                  <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
-                    {m.content}
-                  </div>
+          <div style={styles.chat} className="chatScroll">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                style={{
+                  ...styles.msg,
+                  justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                }}
+              >
+                <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
+                  {m.content}
                 </div>
-              ))}
+              </div>
+            ))}
 
-              {loading && (
-                <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
-                  <div style={{ ...styles.bubble, ...styles.typing }}>
-                    печатает<span className="dot">.</span>
-                    <span className="dot">.</span>
-                    <span className="dot">.</span>
-                  </div>
+            {loading && (
+              <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
+                <div style={{ ...styles.bubble, ...styles.typing }}>
+                  печатает<span className="dot">.</span>
+                  <span className="dot">.</span>
+                  <span className="dot">.</span>
                 </div>
-              )}
+              </div>
+            )}
 
-              <div ref={bottomRef} />
-            </div>
+            <div ref={bottomRef} />
+          </div>
 
-            {/* INPUT pinned with safe-area */}
-            <div style={styles.inputRow}>
-              <input
-                style={styles.input}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
-                placeholder="Напиши…"
-              />
-              <button style={styles.button} onClick={send}>
-                Отправить
-              </button>
-            </div>
+          {/* ✅ кнопка и инпут не вылезают на iPhone: на мобилке стек, на десктопе ряд */}
+          <div style={styles.inputRow} className="inputRow">
+            <input
+              className="textInput"
+              style={styles.input}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Напиши..."
+              inputMode="text"
+            />
+            <button className="sendBtn" style={styles.button} onClick={send}>
+              Отправить
+            </button>
           </div>
         </div>
       </div>
-
-      {/* Responsive tweaks via inline <style> (works in this single file) */}
-      <style jsx>{`
-        @media (max-width: 860px) {
-          :global(body) {
-            background: #1e1e1e;
-          }
-        }
-      `}</style>
-    </>
+    </div>
   );
 }
 
+/* ---------- styles ---------- */
+
 const styles = {
   page: {
-    minHeight: "100dvh",
+    minHeight: "100vh",
     background: "#1E1E1E",
     display: "flex",
     justifyContent: "center",
-    padding: 18,
+    padding: 24,
   },
-
   wrap: {
     width: "100%",
     maxWidth: 980,
@@ -335,129 +369,81 @@ const styles = {
     gap: 18,
   },
 
-  hero: {
+  heroCard: {
     position: "relative",
+    overflow: "hidden",
     width: "100%",
-    padding: 26,
     borderRadius: 26,
+    padding: "26px 28px 22px 28px",
     background: "rgba(25, 28, 35, 0.78)",
     border: "1px solid rgba(255,255,255,0.08)",
     boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
-    backdropFilter: "blur(18px)",
-    overflow: "hidden",
-    animation: "softFloat 8s ease-in-out infinite",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
+    backdropFilter: "blur(22px)",
+    WebkitBackdropFilter: "blur(22px)",
+    minHeight: 150,
+  },
+
+  heroLogo: {
+    position: "absolute",
+    right: 26,
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: 180,
+    opacity: 0.95,
+    pointerEvents: "none",
+  },
+
+  heroTitle: {
+    margin: 0,
+    fontSize: 56,
+    lineHeight: 1.02,
+    letterSpacing: -0.6,
   },
 
   heroText: {
-    minWidth: 0,
-    flex: 1,
-  },
-
-  h1: {
-    margin: 0,
-    color: "#fff",
-    fontSize: 54,
-    lineHeight: 1.05,
-    letterSpacing: -0.8,
-  },
-
-  line: {
     margin: "10px 0 0 0",
-    color: "rgba(255,255,255,0.78)",
+    color: "rgba(255,255,255,0.8)",
     fontSize: 16,
-    lineHeight: 1.35,
-    maxWidth: 520,
-  },
-
-  hidden: {
-    opacity: 0,
-    transform: "translateY(10px)",
-    filter: "blur(2px)",
-  },
-
-  appear: {
-    animation: "fadeUp 0.9s ease forwards",
-  },
-
-  appear2: {
-    animation: "fadeUp 0.65s ease forwards",
-  },
-
-  appear3: {
-    animation: "fadeUp 0.65s ease forwards",
-  },
-
-  logoBox: {
-    width: 230,
-    height: 120,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    overflow: "hidden",
-    flexShrink: 0,
-  },
-
-  logoImg: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    opacity: 0.9,
-  },
-
-  giggle: {
-    position: "absolute",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(245,200,66,0.25)",
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 14,
-    backdropFilter: "blur(10px)",
-    pointerEvents: "none",
-    userSelect: "none",
+    lineHeight: 1.45,
+    maxWidth: 560,
   },
 
   card: {
     width: "100%",
     borderRadius: 26,
-    background: "rgba(25, 28, 35, 0.82)",
+    background: "rgba(25, 28, 35, 0.85)",
     backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
     border: "1px solid rgba(255,255,255,0.08)",
     boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
-    overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    // IMPORTANT: not too tall on mobile (we handle via viewport units below)
-    height: "min(62dvh, 680px)",
+    overflow: "hidden",
+    height: "78vh", // ✅ чуть выше, чем было (но мобилка переопределит)
   },
 
   header: {
-    padding: 22,
+    padding: 24,
     borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
 
   title: {
+    margin: 0,
     color: "#fff",
     fontSize: 28,
-    fontWeight: 650,
-    margin: 0,
+    fontWeight: 700,
   },
 
   subtitle: {
-    color: "rgba(255,255,255,0.6)",
-    marginTop: 8,
-    marginBottom: 0,
+    margin: "8px 0 0 0",
+    color: "rgba(255,255,255,0.65)",
     fontSize: 14,
     lineHeight: 1.4,
   },
 
   chat: {
     flex: 1,
-    padding: 18,
+    padding: 24,
     overflowY: "auto",
     display: "flex",
     flexDirection: "column",
@@ -466,19 +452,21 @@ const styles = {
 
   msg: {
     display: "flex",
+    marginBottom: 10,
   },
 
   bubble: {
     maxWidth: "78%",
-    padding: "12px 14px",
+    padding: "12px 16px",
     borderRadius: 16,
     background: "rgba(255,255,255,0.05)",
     color: "#fff",
     lineHeight: 1.45,
     fontSize: 15,
-    backdropFilter: "blur(6px)",
     border: "1px solid rgba(255,255,255,0.08)",
-    whiteSpace: "pre-wrap",
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
+    wordBreak: "break-word",
   },
 
   user: {
@@ -494,30 +482,41 @@ const styles = {
 
   inputRow: {
     display: "flex",
-    gap: 10,
-    padding: "14px 14px calc(14px + env(safe-area-inset-bottom)) 14px",
+    gap: 12,
+    padding: 16,
     borderTop: "1px solid rgba(255,255,255,0.06)",
-    background: "rgba(10,12,16,0.25)",
+    alignItems: "center",
+    paddingBottom: "calc(16px + env(safe-area-inset-bottom))", // ✅ низ под айфоны
   },
 
   input: {
     flex: 1,
+    height: 46,
     background: "#0f1116",
-    border: "1px solid rgba(255,255,255,0.14)",
+    border: "1px solid rgba(255,255,255,0.15)",
     borderRadius: 14,
-    padding: "12px 14px",
+    padding: "0 14px",
     color: "#fff",
     outline: "none",
   },
 
   button: {
+    height: 46,
     background: "#f5c842",
     border: "none",
     borderRadius: 14,
-    padding: "0 16px",
+    padding: "0 18px",
     color: "#111",
     fontWeight: 700,
     cursor: "pointer",
-    minWidth: 110,
+    flexShrink: 0, // ✅ чтобы не вылезало, а сжимало инпут
+    minWidth: 130,
   },
 };
+
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
+}
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
