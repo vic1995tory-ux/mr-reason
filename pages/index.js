@@ -8,57 +8,46 @@ export default function Home() {
   const typingSound = useRef(null);
   const bottomRef = useRef(null);
 
-  // ====== HERO ANIMATION STATE ======
+  // --- Hero animation states
   const [showH1, setShowH1] = useState(false);
-  const [showH2, setShowH2] = useState(false);
-  const [showH3, setShowH3] = useState(false);
-
+  const [showL2, setShowL2] = useState(false);
+  const [showL3, setShowL3] = useState(false);
   const [showGiggles, setShowGiggles] = useState(false);
-  const [giggles, setGiggles] = useState([]); // {id, top, left, delay, duration}
 
-  // 3 отдельные "шейпы" — фиксируем их "рандомность" один раз на загрузке
-  const initialGiggles = useMemo(() => {
-    const pick = () => {
-      // область — правый верх hero-карты, чтобы выглядело как на твоём скрине
-      // top/left в процентах относительно hero-карты
-      const top = 18 + Math.random() * 55;   // 18%..73%
-      const left = 58 + Math.random() * 33;  // 58%..91%
-      const delay = Math.random() * 0.6;     // небольшая рассинхронизация
-      const duration = 0.6 + Math.random() * 0.8; // скорость мигания
-      return { top, left, delay, duration };
-    };
-
-    return [
-      { id: "g1", text: "ыхы хы", ...pick() },
-      { id: "g2", text: "ыхы хы", ...pick() },
-      { id: "g3", text: "ыхы хы", ...pick() },
-    ];
+  // 3 "ыхы хы" shapes positions (random-ish but stable per page load)
+  const giggles = useMemo(() => {
+    // inside hero card
+    const items = [0, 1, 2].map((i) => {
+      const top = 20 + Math.random() * 55; // %
+      const left = 8 + Math.random() * 72; // %
+      const delay = Math.random() * 0.8; // seconds
+      const blink = 0.7 + Math.random() * 0.9; // seconds
+      return { id: i, top, left, delay, blink };
+    });
+    return items;
   }, []);
 
-  // Появление строк + запуск "гирлянды" после 2й строки
+  // HERO: sequence H1 -> line2 -> line3, with 0.2s gaps
   useEffect(() => {
-    const t1 = setTimeout(() => setShowH1(true), 150);            // старт
-    const t2 = setTimeout(() => setShowH2(true), 150 + 1200 + 200); // 0.2s пауза после 1й
-    const t3 = setTimeout(() => setShowH3(true), 150 + 1200 + 200 + 900 + 200); // 0.2s пауза после 2й
+    const t1 = setTimeout(() => setShowH1(true), 200);
+    const t2 = setTimeout(() => setShowL2(true), 200 + 900 + 200); // after H1 fade + gap
+    const t3 = setTimeout(() => setShowL3(true), 200 + 900 + 200 + 650 + 200); // after L2 fade + gap
 
-    // "ыхы хы" должны появиться ПОСЛЕ второй строки
-    const tgStart = setTimeout(() => {
-      setGiggles(initialGiggles);
-      setShowGiggles(true);
-
-      // длительность ~4 секунды после старта первой "ыхы хы"
-      setTimeout(() => setShowGiggles(false), 4000);
-    }, 150 + 1200 + 200 + 250); // чуть после появления 2й строки
+    // start giggles after line2 starts showing
+    const tgOn = setTimeout(() => setShowGiggles(true), 200 + 900 + 200 + 150);
+    // keep giggles ~4s from first appearance
+    const tgOff = setTimeout(() => setShowGiggles(false), 200 + 900 + 200 + 150 + 4000);
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
-      clearTimeout(tgStart);
+      clearTimeout(tgOn);
+      clearTimeout(tgOff);
     };
-  }, [initialGiggles]);
+  }, []);
 
-  // ====== CHAT AUTOSCROLL ======
+  // Autoscroll to bottom
   useEffect(() => {
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -69,9 +58,9 @@ export default function Home() {
     const a = typingSound.current;
     if (!a) return;
     try {
-      a.volume = 0.8; // было тихо — делаем громче
+      a.volume = 0.75; // громче
       a.currentTime = 0;
-      await a.play(); // может быть заблокировано браузером — это ок
+      await a.play(); // может быть заблокировано — это ок
     } catch (_) {}
   }
 
@@ -92,6 +81,7 @@ export default function Home() {
     setMessages((m) => [...m, { role: "user", content: text }]);
     setLoading(true);
 
+    // важно: play() должен быть от user action (Enter/Click)
     await startTypingSound();
 
     try {
@@ -113,9 +103,22 @@ export default function Home() {
   }
 
   return (
-    <div style={styles.page}>
+    <>
       <style jsx global>{`
-        /* Скрываем скроллбар (скролл работает) */
+        /* ---- Fix "white frame" ---- */
+        html,
+        body,
+        #__next {
+          height: 100%;
+          margin: 0;
+          background: #1e1e1e;
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+
+        /* Hide scrollbar but keep scroll */
         .chatScroll {
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -125,45 +128,74 @@ export default function Home() {
           height: 0;
         }
 
-        /* Плавнее и подольше появление */
-        @keyframes softIn {
-          from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
-          to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
-        }
-
-        /* Лёгкое "дыхание" карточек */
-        @keyframes float {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-3px); }
-          100% { transform: translateY(0px); }
-        }
-
-        /* Точки typing */
-        .dot { animation: blink 1.2s infinite both; }
-        .dot:nth-child(2) { animation-delay: 0.2s; }
-        .dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes blink {
-          0% { opacity: 0.2; }
-          20% { opacity: 1; }
-          100% { opacity: 0.2; }
-        }
-
-        /* "Гирлянда" — мерцание */
-        @keyframes garland {
-          0% { opacity: 0.1; transform: translateY(0px) scale(0.98); }
-          15% { opacity: 1; }
-          50% { opacity: 0.2; transform: translateY(-2px) scale(1); }
-          100% { opacity: 0.1; transform: translateY(0px) scale(0.98); }
-        }
-
-        /* Адаптив: ширина и высоты, чтобы инпут был удобный */
-        @media (max-width: 520px) {
-          .wrap {
-            padding: 14px !important;
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+            filter: blur(2px);
           }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+            filter: blur(0);
+          }
+        }
+
+        @keyframes softFloat {
+          0% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-3px);
+          }
+          100% {
+            transform: translateY(0px);
+          }
+        }
+
+        @keyframes blinkDot {
+          0% {
+            opacity: 0.2;
+          }
+          20% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0.2;
+          }
+        }
+
+        .dot {
+          animation: blinkDot 1.2s infinite both;
+        }
+        .dot:nth-child(2) {
+          animation-delay: 0.18s;
+        }
+        .dot:nth-child(3) {
+          animation-delay: 0.36s;
+        }
+
+        /* Garland blink for giggles */
+        @keyframes garland {
+          0%,
+          100% {
+            opacity: 0.15;
+            transform: translateY(0);
+          }
+          50% {
+            opacity: 0.95;
+            transform: translateY(-1px);
+          }
+        }
+
+        /* Prevent iOS zoom on focus */
+        input,
+        textarea {
+          font-size: 16px;
         }
       `}</style>
 
+      {/* typing audio */}
       <audio
         ref={typingSound}
         src="https://cdn.pixabay.com/audio/2022/03/15/audio_6b1b6e3b0f.mp3"
@@ -171,240 +203,252 @@ export default function Home() {
         playsInline
       />
 
-      <div className="wrap" style={styles.wrap}>
-        {/* HERO */}
-        <div style={styles.hero}>
-          <div style={styles.heroLeft}>
-            <div
-              style={{
-                ...styles.heroH1,
-                ...(showH1 ? styles.show : styles.hide),
-              }}
-            >
-              Mr. Reason!
+      <div style={styles.page}>
+        <div style={styles.wrap}>
+          {/* HERO CARD */}
+          <div style={styles.hero}>
+            <div style={styles.heroText}>
+              <h1 style={{ ...styles.h1, ...(showH1 ? styles.appear : styles.hidden) }}>
+                Mr. Reason!
+              </h1>
+
+              <p style={{ ...styles.line, ...(showL2 ? styles.appear2 : styles.hidden) }}>
+                Мой любимый человек Реваз! С днём рождения.
+              </p>
+
+              <p style={{ ...styles.line, ...(showL3 ? styles.appear3 : styles.hidden) }}>
+                Это мой изощрённый способ порадовать тебя.
+              </p>
             </div>
 
-            <div
-              style={{
-                ...styles.heroH2,
-                ...(showH2 ? styles.show : styles.hide),
-              }}
-            >
-              Мой любимый человек Реваз! С днём рождения.
-            </div>
-
-            <div
-              style={{
-                ...styles.heroH3,
-                ...(showH3 ? styles.show : styles.hide),
-              }}
-            >
-              Это мой изощрённый способ порадовать тебя.
-            </div>
-          </div>
-
-          {/* Гирлянда "ыхы хы" — 3 отдельных шейпа */}
-          {showGiggles &&
-            giggles.map((g) => (
-              <div
-                key={g.id}
-                style={{
-                  ...styles.giggle,
-                  top: `${g.top}%`,
-                  left: `${g.left}%`,
-                  animation: `garland ${g.duration}s ${g.delay}s infinite`,
+            {/* LOGO / ART */}
+            {/* Если у тебя PNG будет лежать в /public/logo.png, то src="/logo.png" */}
+            <div style={styles.logoBox}>
+              <img
+                src="/logo.png"
+                alt="logo"
+                style={styles.logoImg}
+                onError={(e) => {
+                  // если логотип не найден — просто прячем, чтобы не ломать верстку
+                  e.currentTarget.style.display = "none";
                 }}
-              >
-                {g.text}
-              </div>
-            ))}
+              />
+            </div>
 
-          {/* Декор справа (пока как заглушка градиентом; если добавишь png — заменим на <img/>) */}
-          <div style={styles.heroRightDecor} />
-        </div>
-
-        {/* CHAT CARD */}
-        <div style={styles.card}>
-          <div style={styles.header}>
-            <h2 style={styles.title}>Для Реваза</h2>
-            <p style={styles.subtitle}>
-              Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
-            </p>
+            {/* 3 "ыхы хы" shapes - appear after line2 and blink ~4s */}
+            {showGiggles &&
+              giggles.map((g) => (
+                <div
+                  key={g.id}
+                  style={{
+                    ...styles.giggle,
+                    top: `${g.top}%`,
+                    left: `${g.left}%`,
+                    animation: `garland ${g.blink}s ease-in-out ${g.delay}s infinite`,
+                  }}
+                >
+                  ыхы хы
+                </div>
+              ))}
           </div>
 
-          <div style={styles.chat} className="chatScroll">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                style={{
-                  ...styles.msg,
-                  justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-                }}
-              >
-                <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
-                  {m.content}
+          {/* CHAT CARD */}
+          <div style={styles.card}>
+            <div style={styles.header}>
+              <h2 style={styles.title}>Для Реваза</h2>
+              <p style={styles.subtitle}>
+                Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
+              </p>
+            </div>
+
+            <div style={styles.chat} className="chatScroll">
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  style={{
+                    ...styles.msg,
+                    justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
+                    {m.content}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {loading && (
-              <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
-                <div style={{ ...styles.bubble, ...styles.typing }}>
-                  печатает<span className="dot">.</span>
-                  <span className="dot">.</span>
-                  <span className="dot">.</span>
+              {loading && (
+                <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
+                  <div style={{ ...styles.bubble, ...styles.typing }}>
+                    печатает<span className="dot">.</span>
+                    <span className="dot">.</span>
+                    <span className="dot">.</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div ref={bottomRef} />
-          </div>
+              <div ref={bottomRef} />
+            </div>
 
-          <div style={styles.inputRow}>
-            <input
-              style={styles.input}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Напиши..."
-            />
-            <button style={styles.button} onClick={send}>
-              Отправить
-            </button>
+            {/* INPUT pinned with safe-area */}
+            <div style={styles.inputRow}>
+              <input
+                style={styles.input}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send()}
+                placeholder="Напиши…"
+              />
+              <button style={styles.button} onClick={send}>
+                Отправить
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Responsive tweaks via inline <style> (works in this single file) */}
+      <style jsx>{`
+        @media (max-width: 860px) {
+          :global(body) {
+            background: #1e1e1e;
+          }
+        }
+      `}</style>
+    </>
   );
 }
 
 const styles = {
   page: {
-    minHeight: "100vh",
-    background: "#1E1E1E", // фон как на Тильде
+    minHeight: "100dvh",
+    background: "#1E1E1E",
     display: "flex",
     justifyContent: "center",
-    alignItems: "flex-start",
+    padding: 18,
   },
 
   wrap: {
     width: "100%",
     maxWidth: 980,
-    padding: 24,
     display: "flex",
     flexDirection: "column",
     gap: 18,
-    fontFamily: "Inter, sans-serif",
   },
 
   hero: {
     position: "relative",
     width: "100%",
-    borderRadius: 24,
-    padding: 22,
-    background: "rgba(25, 28, 35, 0.75)",
+    padding: 26,
+    borderRadius: 26,
+    background: "rgba(25, 28, 35, 0.78)",
     border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+    boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
     backdropFilter: "blur(18px)",
     overflow: "hidden",
-    animation: "float 7s ease-in-out infinite",
+    animation: "softFloat 8s ease-in-out infinite",
     display: "flex",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 16,
-    minHeight: 120,
   },
 
-  heroLeft: {
-    maxWidth: 640,
-    zIndex: 2,
+  heroText: {
+    minWidth: 0,
+    flex: 1,
   },
 
-  heroH1: {
-    fontSize: 44,
-    fontWeight: 800,
-    letterSpacing: -0.5,
+  h1: {
+    margin: 0,
     color: "#fff",
-    marginBottom: 8,
-  },
-  heroH2: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.75)",
-    marginBottom: 4,
-  },
-  heroH3: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.75)",
+    fontSize: 54,
+    lineHeight: 1.05,
+    letterSpacing: -0.8,
   },
 
-  show: {
-    opacity: 1,
-    transform: "translateY(0)",
-    filter: "blur(0)",
-    animation: "softIn 1.2s ease both",
+  line: {
+    margin: "10px 0 0 0",
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 16,
+    lineHeight: 1.35,
+    maxWidth: 520,
   },
-  hide: {
+
+  hidden: {
     opacity: 0,
     transform: "translateY(10px)",
-    filter: "blur(4px)",
+    filter: "blur(2px)",
+  },
+
+  appear: {
+    animation: "fadeUp 0.9s ease forwards",
+  },
+
+  appear2: {
+    animation: "fadeUp 0.65s ease forwards",
+  },
+
+  appear3: {
+    animation: "fadeUp 0.65s ease forwards",
+  },
+
+  logoBox: {
+    width: 230,
+    height: 120,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+
+  logoImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    opacity: 0.9,
   },
 
   giggle: {
     position: "absolute",
-    zIndex: 3,
-    padding: "8px 12px",
+    padding: "10px 14px",
     borderRadius: 999,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(245,200,66,0.25)",
     color: "rgba(255,255,255,0.85)",
     fontSize: 14,
     backdropFilter: "blur(10px)",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     pointerEvents: "none",
+    userSelect: "none",
   },
 
-  heroRightDecor: {
-    width: 210,
-    minWidth: 210,
-    borderRadius: 18,
-    background:
-      "radial-gradient(circle at 40% 35%, rgba(245,200,66,0.35), transparent 55%), radial-gradient(circle at 70% 65%, rgba(74,117,255,0.35), transparent 55%)",
-    opacity: 0.9,
-    border: "1px solid rgba(255,255,255,0.06)",
-    zIndex: 1,
-  },
-
-  // CHAT CARD
   card: {
     width: "100%",
-    borderRadius: 24,
-    background: "rgba(25, 28, 35, 0.85)",
+    borderRadius: 26,
+    background: "rgba(25, 28, 35, 0.82)",
+    backdropFilter: "blur(20px)",
     border: "1px solid rgba(255,255,255,0.08)",
     boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
-    backdropFilter: "blur(20px)",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-
-    // ↑ вот тут правка высоты: делаем чуть выше + аккуратнее на мобилке
-    height: "calc(100vh - 220px)",
-    minHeight: 520,
-    maxHeight: 820,
+    // IMPORTANT: not too tall on mobile (we handle via viewport units below)
+    height: "min(62dvh, 680px)",
   },
 
   header: {
-    padding: 20,
+    padding: 22,
     borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
 
   title: {
     color: "#fff",
     fontSize: 28,
-    fontWeight: 700,
+    fontWeight: 650,
     margin: 0,
   },
 
   subtitle: {
-    color: "#aaa",
+    color: "rgba(255,255,255,0.6)",
     marginTop: 8,
     marginBottom: 0,
     fontSize: 14,
@@ -422,12 +466,11 @@ const styles = {
 
   msg: {
     display: "flex",
-    animation: "softIn 0.55s ease both",
   },
 
   bubble: {
     maxWidth: "78%",
-    padding: "12px 16px",
+    padding: "12px 14px",
     borderRadius: 16,
     background: "rgba(255,255,255,0.05)",
     color: "#fff",
@@ -435,7 +478,7 @@ const styles = {
     fontSize: 15,
     backdropFilter: "blur(6px)",
     border: "1px solid rgba(255,255,255,0.08)",
-    wordBreak: "break-word",
+    whiteSpace: "pre-wrap",
   },
 
   user: {
@@ -445,38 +488,36 @@ const styles = {
   },
 
   typing: {
-    opacity: 0.65,
+    opacity: 0.7,
     fontStyle: "italic",
   },
 
   inputRow: {
     display: "flex",
-    gap: 12,
-    padding: 14,
+    gap: 10,
+    padding: "14px 14px calc(14px + env(safe-area-inset-bottom)) 14px",
     borderTop: "1px solid rgba(255,255,255,0.06)",
-    background: "rgba(0,0,0,0.12)",
+    background: "rgba(10,12,16,0.25)",
   },
 
   input: {
     flex: 1,
-    minWidth: 0,
     background: "#0f1116",
-    border: "1px solid rgba(255,255,255,0.15)",
-    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 14,
     padding: "12px 14px",
     color: "#fff",
     outline: "none",
-    fontSize: 16, // важно для iOS чтобы не зумило
   },
 
   button: {
     background: "#f5c842",
     border: "none",
-    borderRadius: 12,
-    padding: "0 18px",
+    borderRadius: 14,
+    padding: "0 16px",
     color: "#111",
     fontWeight: 700,
     cursor: "pointer",
-    whiteSpace: "nowrap",
+    minWidth: 110,
   },
 };
