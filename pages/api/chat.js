@@ -107,10 +107,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message } = req.body || {};
-    if (!message) {
+    const { message, history } = req.body || {};
+    if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "No message" });
     }
+
+    // ✅ Безопасно готовим историю диалога
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter(
+            (m) =>
+              m &&
+              (m.role === "user" || m.role === "assistant") &&
+              typeof m.content === "string" &&
+              m.content.trim().length > 0
+          )
+          .slice(-20)
+      : [];
 
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -119,7 +132,12 @@ export default async function handler(req, res) {
       messages: [
         { role: "system", content: SYSTEM_ROLE_STYLE },
         { role: "system", content: SYSTEM_DOSSIER },
-        { role: "user", content: message },
+
+        // ✅ ВОТ ЭТО и решает “как будто первое сообщение”
+        ...safeHistory,
+
+        // ✅ если вдруг фронт не прислал историю — всё равно есть message
+        ...(safeHistory.length ? [] : [{ role: "user", content: message }]),
       ],
     });
 
