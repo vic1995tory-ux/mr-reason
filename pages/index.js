@@ -1,5 +1,5 @@
-// pages/index.js
-import { useEffect, useMemo, useRef, useState } from "react";
+import Head from "next/head";
+import { useState, useRef, useEffect } from "react";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
@@ -8,45 +8,6 @@ export default function Home() {
 
   const typingSound = useRef(null);
   const bottomRef = useRef(null);
-
-  // 3 "ыхы хы" как отдельные шейпы: появляются после второй строки и живут ~4с
-  const [showHihi, setShowHihi] = useState(false);
-  const [hihi, setHihi] = useState([
-    { x: 0.18, y: 0.45, a: 0.9 },
-    { x: 0.45, y: 0.55, a: 0.9 },
-    { x: 0.72, y: 0.42, a: 0.9 },
-  ]);
-
-  useEffect(() => {
-    // тайминг появления: H1 -> (0.2s) H2 -> (0.2s) H3, после H2 включаем "ыхы хы"
-    const t = setTimeout(() => {
-      setShowHihi(true);
-
-      // рандом как гирлянда (слегка дергаем позиции/прозрачность)
-      const iv = setInterval(() => {
-        setHihi((prev) =>
-          prev.map((p) => ({
-            x: clamp(p.x + rand(-0.03, 0.03), 0.08, 0.86),
-            y: clamp(p.y + rand(-0.03, 0.03), 0.22, 0.82),
-            a: clamp(p.a + rand(-0.15, 0.15), 0.5, 1),
-          }))
-        );
-      }, 220);
-
-      // выключить через ~4 секунды от первого появления
-      const off = setTimeout(() => {
-        clearInterval(iv);
-        setShowHihi(false);
-      }, 4000);
-
-      return () => {
-        clearInterval(iv);
-        clearTimeout(off);
-      };
-    }, 900); // появляется после второй строки (под нашу анимацию ниже)
-
-    return () => clearTimeout(t);
-  }, []);
 
   // автоскролл к последнему сообщению
   useEffect(() => {
@@ -59,7 +20,7 @@ export default function Home() {
     const a = typingSound.current;
     if (!a) return;
     try {
-      a.volume = 0.7;
+      a.volume = 0.8; // сделай 1.0 если хочешь громче
       a.currentTime = 0;
       await a.play();
     } catch (_) {}
@@ -79,22 +40,35 @@ export default function Home() {
     if (!text || loading) return;
 
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: text }]);
+    const nextMessages = [...messages, { role: "user", content: text }];
+    setMessages(nextMessages);
     setLoading(true);
+
+    // старт звука — важно: внутри клика/Enter
     await startTypingSound();
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        // ✅ отправляем историю, чтобы бот “помнил”
+        body: JSON.stringify({
+          message: text,
+          history: nextMessages.slice(-20), // последние 20 реплик — хватает
+        }),
       });
 
       const data = await res.json();
 
-      setMessages((m) => [...m, { role: "assistant", content: data.reply || "…" }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: data.reply || "…" },
+      ]);
     } catch {
-      setMessages((m) => [...m, { role: "assistant", content: "Ошибка. Попробуй ещё раз." }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: "Ошибка. Попробуй ещё раз." },
+      ]);
     } finally {
       setLoading(false);
       stopTypingSound();
@@ -102,153 +76,316 @@ export default function Home() {
   }
 
   return (
-    <div style={styles.page}>
+    <div className="page">
+      <Head>
+        {/* важно для мобилки: без зума при фокусе, + корректная высота */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+      </Head>
+
       <style jsx global>{`
-        /* ✅ Вернуть “тот шрифт” и закрепить его везде */
+        /* ✅ Возвращаем “тот” аккуратный шрифт */
+        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+        :root {
+          --bg: #1e1e1e;
+          --card: rgba(25, 28, 35, 0.86);
+          --stroke: rgba(255, 255, 255, 0.08);
+          --stroke2: rgba(255, 255, 255, 0.06);
+          --text: #ffffff;
+          --sub: #a8a8a8;
+          --input: #0f1116;
+          --gold1: #f5c842;
+          --gold2: #f7d774;
+        }
+
         html,
         body {
           height: 100%;
-        }
-        body {
           margin: 0;
+          background: var(--bg);
           font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-          background: #1e1e1e;
-          color: #fff;
-        }
-        h1,
-        h2,
-        h3,
-        p,
-        input,
-        button {
-          font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
         }
 
-        /* ✅ iOS zoom на фокусе инпута: не будет, если font-size >= 16px */
-        input {
-          font-size: 16px !important;
+        /* фон без белых рамок */
+        .page {
+          min-height: 100dvh;
+          background: var(--bg);
+          padding: 24px;
+          box-sizing: border-box;
+          display: flex;
+          justify-content: center;
         }
 
-        /* Скрыть скроллбар, но оставить скролл */
-        .chatScroll {
+        .wrap {
+          width: 100%;
+          max-width: 980px;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+
+        /* HERO */
+        .hero {
+          position: relative;
+          width: 100%;
+          background: var(--card);
+          border: 1px solid var(--stroke);
+          border-radius: 28px;
+          padding: 26px 26px 24px 26px;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+          backdrop-filter: blur(18px);
+          overflow: hidden;
+        }
+
+        .heroTitle {
+          margin: 0;
+          font-size: 56px;
+          line-height: 1;
+          letter-spacing: -0.02em;
+          color: var(--text);
+          opacity: 0;
+          transform: translateY(8px);
+          animation: appear 0.9s ease forwards;
+        }
+
+        .heroLine {
+          margin: 14px 0 0 0;
+          color: rgba(255, 255, 255, 0.78);
+          font-size: 18px;
+          line-height: 1.5;
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        .heroLine.l2 {
+          animation: appear 0.9s ease forwards;
+          animation-delay: 0.2s;
+        }
+        .heroLine.l3 {
+          animation: appear 0.9s ease forwards;
+          animation-delay: 0.4s;
+        }
+
+        /* ✅ логотип БЕЗ отдельной рамки (просто картинка) */
+        .logo {
+          position: absolute;
+          right: 18px;
+          top: 14px;
+          width: 230px;
+          height: auto;
+          opacity: 0.95;
+          pointer-events: none;
+          filter: drop-shadow(0 16px 30px rgba(0,0,0,0.35));
+        }
+
+        /* гирлянда "ыхы хы" (3 шейпа), появляется после 2-й строки */
+        .giggle {
+          position: absolute;
+          left: 28px;
+          top: 120px;
+          color: rgba(255, 255, 255, 0.88);
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          opacity: 0;
+        }
+
+        /* замедли мерцание */
+        @keyframes blinkSoft {
+          0% { opacity: 0.18; }
+          40% { opacity: 1; }
+          100% { opacity: 0.25; }
+        }
+
+        @keyframes appear {
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* каждая длится в сумме ~4с с момента первой */
+        .g1 {
+          animation: giggleShow 0.5s ease forwards 0.6s, blinkSoft 1.8s ease-in-out 0.9s infinite;
+        }
+        .g2 {
+          left: 44%;
+          top: 156px;
+          animation: giggleShow 0.5s ease forwards 1.2s, blinkSoft 2.2s ease-in-out 1.5s infinite;
+        }
+        .g3 {
+          left: 24%;
+          top: 196px;
+          animation: giggleShow 0.5s ease forwards 1.8s, blinkSoft 2.0s ease-in-out 2.1s infinite;
+        }
+
+        @keyframes giggleShow {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* прячем всё примерно через 4с после первой */
+        .giggleWrap {
+          animation: giggleHide 0.1s linear forwards;
+          animation-delay: 4.6s; /* 0.6 + ~4s */
+        }
+        @keyframes giggleHide {
+          to { opacity: 0; }
+        }
+
+        /* CHAT CARD */
+        .card {
+          width: 100%;
+          background: var(--card);
+          border: 1px solid var(--stroke);
+          border-radius: 28px;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+          backdrop-filter: blur(18px);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          /* ✅ Высота адекватная и на десктопе, и на мобилке */
+          height: min(720px, calc(100dvh - 240px));
+        }
+
+        .header {
+          padding: 22px 22px 16px 22px;
+          border-bottom: 1px solid var(--stroke2);
+        }
+
+        .h2 {
+          margin: 0;
+          color: var(--text);
+          font-size: 30px;
+          font-weight: 700;
+        }
+
+        .sub {
+          margin: 8px 0 0 0;
+          color: var(--sub);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        /* чат: скролл есть, полосы нет */
+        .chat {
+          flex: 1;
+          padding: 18px 18px 8px 18px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+
           scrollbar-width: none;
           -ms-overflow-style: none;
         }
-        .chatScroll::-webkit-scrollbar {
+        .chat::-webkit-scrollbar {
           width: 0;
           height: 0;
         }
 
-        /* Плавные появления (дольше + пауза 0.2с между строками) */
-        @keyframes fadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-            filter: blur(4px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-            filter: blur(0);
-          }
+        .row {
+          display: flex;
+          animation: fadeIn 0.35s ease;
         }
 
-        .h1 {
-          opacity: 0;
-          animation: fadeUp 0.8s ease forwards;
-          animation-delay: 0.0s;
-        }
-        .h2 {
-          opacity: 0;
-          animation: fadeUp 0.9s ease forwards;
-          animation-delay: 0.2s;
-        }
-        .h3 {
-          opacity: 0;
-          animation: fadeUp 0.9s ease forwards;
-          animation-delay: 0.4s;
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
-        /* “ыхы хы” мерцание — замедлить */
-        @keyframes slowBlink {
-          0% {
-            opacity: 0.25;
-            transform: translateY(0);
-          }
-          50% {
-            opacity: 1;
-            transform: translateY(-1px);
-          }
-          100% {
-            opacity: 0.25;
-            transform: translateY(0);
-          }
-        }
-        .hihiShape {
-          position: absolute;
-          padding: 10px 14px;
-          border-radius: 14px;
+        .bubble {
+          max-width: 78%;
+          padding: 12px 14px;
+          border-radius: 16px;
           background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.09);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          color: rgba(255, 255, 255, 0.9);
-          font-weight: 600;
-          letter-spacing: 0.2px;
-          animation: slowBlink 1.9s ease-in-out infinite; /* ✅ медленнее */
-          user-select: none;
-          pointer-events: none;
-          white-space: nowrap;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--text);
+          line-height: 1.45;
+          font-size: 15px;
+          backdrop-filter: blur(6px);
+          word-break: break-word;
         }
 
-        /* “typing...” точки */
-        .dot {
-          animation: blink 1.6s infinite both;
-        }
-        .dot:nth-child(2) {
-          animation-delay: 0.25s;
-        }
-        .dot:nth-child(3) {
-          animation-delay: 0.5s;
-        }
-        @keyframes blink {
-          0% {
-            opacity: 0.2;
-          }
-          20% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0.2;
-          }
+        .user {
+          background: linear-gradient(135deg, var(--gold1), var(--gold2));
+          color: #111;
+          border: none;
         }
 
-        /* ✅ Мобилка: кнопка всегда помещается в рамку + удобный низ */
+        .typing {
+          opacity: 0.65;
+          font-style: italic;
+        }
+
+        .dots .dot {
+          display: inline-block;
+          animation: dotBlink 1.4s infinite both;
+        }
+        .dots .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dots .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBlink {
+          0% { opacity: 0.2; }
+          20% { opacity: 1; }
+          100% { opacity: 0.2; }
+        }
+
+        /* ✅ UX как ChatGPT: поле ввода удобно и НЕ прилипает к самому низу */
+        .inputRow {
+          padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+          border-top: 1px solid var(--stroke2);
+          display: flex;
+          gap: 12px;
+          background: rgba(0,0,0,0.08);
+        }
+
+        .input {
+          flex: 1;
+          background: var(--input);
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 14px;
+          padding: 12px 14px;
+          color: var(--text);
+          outline: none;
+          font-size: 16px; /* ✅ важно: iOS не будет зумить */
+        }
+
+        .btn {
+          background: linear-gradient(135deg, var(--gold1), var(--gold2));
+          border: none;
+          border-radius: 14px;
+          padding: 0 18px;
+          color: #111;
+          font-weight: 700;
+          cursor: pointer;
+          min-width: 132px;
+          height: 44px;
+        }
+
+        /* ✅ мобилка */
         @media (max-width: 520px) {
+          .page { padding: 14px; }
+          .hero { padding: 18px; border-radius: 22px; }
+          .heroTitle { font-size: 46px; }
+          .heroLine { font-size: 16px; }
+          .logo { width: 150px; right: 10px; top: 10px; }
+
+          .card {
+            border-radius: 22px;
+            height: calc(100dvh - 260px); /* чтобы клавиатуре было куда жить */
+          }
+
+          .header { padding: 18px 18px 14px; }
+          .h2 { font-size: 28px; }
+
+          .chat { padding: 16px 14px 8px; }
+
           .inputRow {
             flex-direction: column;
             gap: 10px;
-            padding-bottom: calc(16px + env(safe-area-inset-bottom));
           }
-          .sendBtn {
+
+          .btn {
             width: 100%;
-            height: 46px;
-          }
-          .textInput {
-            width: 100%;
-            height: 46px;
-          }
-          .chatCard {
-            height: min(74vh, 620px); /* ✅ короче, чтобы поле ввода было удобно */
-          }
-          .heroCard {
-            padding: 18px 18px 16px 18px;
-          }
-          .heroLogo {
-            width: 120px !important;
-            right: 14px !important;
-            top: 18px !important;
-            transform: none !important;
+            min-width: 0;
           }
         }
       `}</style>
@@ -260,69 +397,56 @@ export default function Home() {
         playsInline
       />
 
-      {/* HERO */}
-      <div style={styles.wrap}>
-        <div style={styles.heroCard} className="heroCard">
-          {/* ✅ Логотип не в рамке: просто элемент внутри hero */}
-          <img src="/logo.png" alt="logo" className="heroLogo" style={styles.heroLogo} />
+      <div className="wrap">
+        {/* HERO */}
+        <div className="hero">
+          {/* ✅ положи файл сюда: /public/logo.png */}
+          <img className="logo" src="/logo.png" alt="logo" />
 
-          <h1 className="h1" style={styles.heroTitle}>
-            Mr. Reason!
-          </h1>
-          <p className="h2" style={styles.heroText}>
-            Мой любимый человек Реваз! С днём рождения.
-          </p>
-          <p className="h3" style={styles.heroText}>
-            Это мой изощрённый способ порадовать тебя.
-          </p>
+          <h1 className="heroTitle">Mr. Reason!</h1>
 
-          {/* 3 отдельные шейпы “ыхы хы”, появляются после 2-й строки */}
-          {showHihi &&
-            hihi.map((p, idx) => (
-              <div
-                key={idx}
-                className="hihiShape"
-                style={{
-                  left: `${p.x * 100}%`,
-                  top: `${p.y * 100}%`,
-                  opacity: p.a,
-                }}
-              >
-                ыхы хы
-              </div>
-            ))}
+          <p className="heroLine l2">Мой любимый человек Реваз! С днём рождения.</p>
+          <p className="heroLine l3">Это мой изощрённый способ порадовать тебя.</p>
+
+          {/* ыхы хы: после второй строки, мерцают мягко, исчезают */}
+          <div className="giggleWrap">
+            <div className="giggle g1">ыхы хы</div>
+            <div className="giggle g2">ыхы хы</div>
+            <div className="giggle g3">ыхы хы</div>
+          </div>
         </div>
 
         {/* CHAT */}
-        <div style={styles.card} className="chatCard">
-          <div style={styles.header}>
-            <h2 style={styles.title}>Для Реваза</h2>
-            <p style={styles.subtitle}>
+        <div className="card">
+          <div className="header">
+            <h2 className="h2">Для Реваза</h2>
+            <p className="sub">
               Можно сказать, что это зеркало. Отражение тебя, которое тебе понравится.
             </p>
           </div>
 
-          <div style={styles.chat} className="chatScroll">
+          <div className="chat">
             {messages.map((m, i) => (
               <div
                 key={i}
-                style={{
-                  ...styles.msg,
-                  justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-                }}
+                className="row"
+                style={{ justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}
               >
-                <div style={{ ...styles.bubble, ...(m.role === "user" ? styles.user : {}) }}>
+                <div className={`bubble ${m.role === "user" ? "user" : ""}`}>
                   {m.content}
                 </div>
               </div>
             ))}
 
             {loading && (
-              <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
-                <div style={{ ...styles.bubble, ...styles.typing }}>
-                  печатает<span className="dot">.</span>
-                  <span className="dot">.</span>
-                  <span className="dot">.</span>
+              <div className="row" style={{ justifyContent: "flex-start" }}>
+                <div className="bubble typing">
+                  печатает
+                  <span className="dots">
+                    <span className="dot">.</span>
+                    <span className="dot">.</span>
+                    <span className="dot">.</span>
+                  </span>
                 </div>
               </div>
             )}
@@ -330,18 +454,19 @@ export default function Home() {
             <div ref={bottomRef} />
           </div>
 
-          {/* ✅ кнопка и инпут не вылезают на iPhone: на мобилке стек, на десктопе ряд */}
-          <div style={styles.inputRow} className="inputRow">
+          <div className="inputRow">
             <input
-              className="textInput"
-              style={styles.input}
+              className="input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
               placeholder="Напиши..."
               inputMode="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="sentences"
             />
-            <button className="sendBtn" style={styles.button} onClick={send}>
+            <button className="btn" onClick={send}>
               Отправить
             </button>
           </div>
@@ -349,174 +474,4 @@ export default function Home() {
       </div>
     </div>
   );
-}
-
-/* ---------- styles ---------- */
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background: "#1E1E1E",
-    display: "flex",
-    justifyContent: "center",
-    padding: 24,
-  },
-  wrap: {
-    width: "100%",
-    maxWidth: 980,
-    display: "flex",
-    flexDirection: "column",
-    gap: 18,
-  },
-
-  heroCard: {
-    position: "relative",
-    overflow: "hidden",
-    width: "100%",
-    borderRadius: 26,
-    padding: "26px 28px 22px 28px",
-    background: "rgba(25, 28, 35, 0.78)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
-    backdropFilter: "blur(22px)",
-    WebkitBackdropFilter: "blur(22px)",
-    minHeight: 150,
-  },
-
-  heroLogo: {
-    position: "absolute",
-    right: 26,
-    top: "50%",
-    transform: "translateY(-50%)",
-    width: 180,
-    opacity: 0.95,
-    pointerEvents: "none",
-  },
-
-  heroTitle: {
-    margin: 0,
-    fontSize: 56,
-    lineHeight: 1.02,
-    letterSpacing: -0.6,
-  },
-
-  heroText: {
-    margin: "10px 0 0 0",
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 16,
-    lineHeight: 1.45,
-    maxWidth: 560,
-  },
-
-  card: {
-    width: "100%",
-    borderRadius: 26,
-    background: "rgba(25, 28, 35, 0.85)",
-    backdropFilter: "blur(20px)",
-    WebkitBackdropFilter: "blur(20px)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    height: "78vh", // ✅ чуть выше, чем было (но мобилка переопределит)
-  },
-
-  header: {
-    padding: 24,
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
-  },
-
-  title: {
-    margin: 0,
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: 700,
-  },
-
-  subtitle: {
-    margin: "8px 0 0 0",
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 14,
-    lineHeight: 1.4,
-  },
-
-  chat: {
-    flex: 1,
-    padding: 24,
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-
-  msg: {
-    display: "flex",
-    marginBottom: 10,
-  },
-
-  bubble: {
-    maxWidth: "78%",
-    padding: "12px 16px",
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.05)",
-    color: "#fff",
-    lineHeight: 1.45,
-    fontSize: 15,
-    border: "1px solid rgba(255,255,255,0.08)",
-    backdropFilter: "blur(6px)",
-    WebkitBackdropFilter: "blur(6px)",
-    wordBreak: "break-word",
-  },
-
-  user: {
-    background: "linear-gradient(135deg, #f5c842, #f7d774)",
-    color: "#111",
-    border: "none",
-  },
-
-  typing: {
-    opacity: 0.7,
-    fontStyle: "italic",
-  },
-
-  inputRow: {
-    display: "flex",
-    gap: 12,
-    padding: 16,
-    borderTop: "1px solid rgba(255,255,255,0.06)",
-    alignItems: "center",
-    paddingBottom: "calc(16px + env(safe-area-inset-bottom))", // ✅ низ под айфоны
-  },
-
-  input: {
-    flex: 1,
-    height: 46,
-    background: "#0f1116",
-    border: "1px solid rgba(255,255,255,0.15)",
-    borderRadius: 14,
-    padding: "0 14px",
-    color: "#fff",
-    outline: "none",
-  },
-
-  button: {
-    height: 46,
-    background: "#f5c842",
-    border: "none",
-    borderRadius: 14,
-    padding: "0 18px",
-    color: "#111",
-    fontWeight: 700,
-    cursor: "pointer",
-    flexShrink: 0, // ✅ чтобы не вылезало, а сжимало инпут
-    minWidth: 130,
-  },
-};
-
-function rand(min, max) {
-  return Math.random() * (max - min) + min;
-}
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
 }
