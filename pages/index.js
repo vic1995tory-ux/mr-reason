@@ -194,7 +194,7 @@ export default function Home() {
           position: relative;
           z-index: 2; /* ✅ UI поверх фоновых шейпов */
           width: 100%;
-          max-width: 980px;
+          max-width: 900px;
           display: flex;
           flex-direction: column;
           gap: 18px;
