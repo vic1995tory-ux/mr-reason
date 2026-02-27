@@ -139,7 +139,7 @@ export default function Home() {
           height: 70vmax;
           border-radius: 999px;
           filter: blur(90px);
-          opacity: 0.35;
+          opacity: 0.65;
           transform: translate3d(0, 0, 0);
           background: radial-gradient(
             circle at 30% 30%,
@@ -148,7 +148,7 @@ export default function Home() {
             rgba(232, 232, 232, 0.25), /* e8e8e8 */
             transparent 70%
           );
-          animation: drift 28s ease-in-out infinite;
+          animation: drift 20s ease-in-out infinite;
         }
 
         .b1 {
@@ -160,19 +160,19 @@ export default function Home() {
           top: -10vmax;
           right: -25vmax;
           animation-duration: 36s;
-          opacity: 0.25;
+          opacity: 0.55;
         }
         .b3 {
           bottom: -30vmax;
           left: 15vmax;
           animation-duration: 40s;
-          opacity: 0.22;
+          opacity: 0.52;
         }
         .b4 {
           bottom: -20vmax;
           right: -15vmax;
           animation-duration: 34s;
-          opacity: 0.18;
+          opacity: 0.58;
         }
 
         @keyframes drift {
@@ -456,7 +456,7 @@ export default function Home() {
             padding: 14px;
           }
           .hero {
-            padding: 14px;
+            padding: 13px;
             border-radius: 22px;
           }
           .heroTitle {
@@ -537,9 +537,9 @@ export default function Home() {
         {/* CHAT */}
         <div className="card">
           <div className="header">
-            <h2 className="h2">Интерактивная открытка</h2>
+            <h2 className="h2">Не надо ломать, хотя...</h2>
             <p className="sub">
-              Можно сказать, что это зеркало. Отражение тебя самого, которое тебе понравится.
+              Ты главное начни, а потом тебе понравится.
             </p>
           </div>
 
